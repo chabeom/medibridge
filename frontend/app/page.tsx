@@ -12,6 +12,15 @@ type Candidate = {
   safety_summary: string;
   score_breakdown: Record<string, number>;
   warnings: string[];
+  approval_status: string;
+  approval_reason: string;
+};
+
+type ApprovalReview = {
+  candidate_name: string;
+  status: string;
+  reason: string;
+  evidence_ids: string[];
 };
 
 type Trace = {
@@ -32,6 +41,7 @@ type AnalysisResult = {
     biomarkers: string[];
   };
   candidates: Candidate[];
+  approval_reviews: ApprovalReview[];
   evidence: Array<{ id: string; source: string; title: string; summary: string; confidence: number }>;
   clinical_drafts: Array<{
     candidate_name: string;
@@ -87,6 +97,7 @@ const agentLabels: Record<string, string> = {
   "Disease Analyst Agent": "질환 분석 에이전트",
   "Evidence Retrieval Agent": "근거 검색 에이전트",
   "Repurposing Hypothesis Agent": "재창출 가설 에이전트",
+  "Approval Status Agent": "승인 적응증 필터 에이전트",
   "Safety and Feasibility Agent": "안전성/실현성 에이전트",
   "Scoring Engine": "후보 점수화 엔진",
   "Clinical Design Agent": "임상 설계 에이전트",
@@ -138,6 +149,8 @@ function summarizeTrace(summary: string) {
   const exact: Record<string, string> = {
     "Loaded cached evidence from the evidence store.": "캐시된 근거 저장소에서 자료를 불러왔습니다.",
     "Generated mechanism-backed repurposing hypotheses from cached evidence.": "근거 기반 약물 재창출 후보를 생성했습니다.",
+    "Filtered candidates that are already approved or standard therapies for the requested disease.":
+      "이미 승인되었거나 표준치료로 쓰이는 약물은 재창출 후보에서 제외했습니다.",
     "Added first-pass safety and chemistry feasibility notes.": "1차 안전성 및 기초 물성 검토를 추가했습니다.",
     "Computed weighted candidate ranking.": "가중치 기반 후보 점수를 계산했습니다.",
     "Drafted early clinical feasibility outlines for top candidates.": "상위 후보의 초기 임상 설계 초안을 작성했습니다.",
@@ -162,6 +175,8 @@ export default function Home() {
   const [notice, setNotice] = useState("질환명을 입력해 분석을 시작하세요");
 
   const topCandidate = result?.candidates[0];
+  const excludedApprovalReviews =
+    result?.approval_reviews.filter((review) => review.status === "excluded_approved_or_standard") ?? [];
   const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000", []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -335,6 +350,17 @@ export default function Home() {
                   </article>
                 )}
               </div>
+              {excludedApprovalReviews.length > 0 && (
+                <div className="approvalReview">
+                  <h3>제외된 표준치료/기준약물</h3>
+                  {excludedApprovalReviews.map((review) => (
+                    <article className="panelBlock" key={`${review.candidate_name}-${review.status}`}>
+                      <strong>{review.candidate_name}</strong>
+                      <p>{review.reason}</p>
+                    </article>
+                  ))}
+                </div>
+              )}
             </section>
               )}
 

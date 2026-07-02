@@ -61,6 +61,16 @@ class DrugCandidate:
     chemistry: dict[str, Any] = field(default_factory=dict)
     score_breakdown: dict[str, float] = field(default_factory=dict)
     overall_score: float = 0.0
+    approval_status: str = "unchecked"
+    approval_reason: str = ""
+
+
+@dataclass(slots=True)
+class CandidateApprovalReview:
+    candidate_name: str
+    status: str
+    reason: str
+    evidence_ids: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -100,6 +110,7 @@ class AnalysisResult:
     disease_profile: DiseaseProfile
     evidence: list[EvidenceItem]
     candidates: list[DrugCandidate]
+    approval_reviews: list[CandidateApprovalReview]
     clinical_drafts: list[ClinicalProtocolDraft]
     critic_findings: list[CriticFinding]
     citation_warnings: list[str]

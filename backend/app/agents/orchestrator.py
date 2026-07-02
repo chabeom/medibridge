@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from app.agents.approval_agent import ApprovalStatusAgent
 from app.agents.clinical_agent import ClinicalDesignAgent
 from app.agents.critic_agent import CriticAgent
 from app.agents.disease_agent import DiseaseAnalystAgent
@@ -27,6 +28,7 @@ class MediBridgeOrchestrator:
         self.disease_agent = DiseaseAnalystAgent()
         self.evidence_agent = EvidenceRetrievalAgent(self.evidence_store)
         self.hypothesis_agent = RepurposingHypothesisAgent()
+        self.approval_agent = ApprovalStatusAgent()
         self.safety_agent = SafetyFeasibilityAgent()
         self.clinical_agent = ClinicalDesignAgent()
         self.critic_agent = CriticAgent()
@@ -54,6 +56,9 @@ class MediBridgeOrchestrator:
         trace.append(step)
 
         candidates, step = await self.hypothesis_agent.run(profile, evidence)
+        trace.append(step)
+
+        candidates, approval_reviews, step = await self.approval_agent.run(profile, candidates)
         trace.append(step)
 
         candidates, step = await self.safety_agent.run(candidates)
@@ -93,6 +98,7 @@ class MediBridgeOrchestrator:
             disease_profile=profile,
             evidence=evidence,
             candidates=candidates,
+            approval_reviews=approval_reviews,
             clinical_drafts=clinical_drafts,
             critic_findings=critic_findings,
             citation_warnings=citation_warnings,

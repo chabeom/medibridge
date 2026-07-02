@@ -39,6 +39,20 @@ class FakePubMedClient:
                 "evidence_type": "randomized_controlled_trial",
                 "confidence": 0.84,
             },
+            {
+                "pmid": "1003",
+                "title": "Candesartan as a potential preventive treatment for migraine",
+                "abstract": "An exploratory study evaluated candesartan for migraine prevention.",
+                "journal": "Example Journal",
+                "publication_year": "2023",
+                "publication_types": ["Clinical Trial"],
+                "mesh_terms": ["Migraine Disorders", "Angiotensin Receptor Antagonists"],
+                "keywords": ["migraine", "prevention"],
+                "drugs": ["Candesartan"],
+                "url": "https://pubmed.ncbi.nlm.nih.gov/1003/",
+                "evidence_type": "clinical_trial",
+                "confidence": 0.78,
+            },
         ]
 
 
@@ -52,10 +66,14 @@ class PipelineTest(unittest.TestCase):
         result = asyncio.run(run_case())
 
         self.assertEqual(result.normalized_disease.canonical_name, "Migraine Disorders")
-        self.assertEqual(len(result.evidence), 2)
-        self.assertGreaterEqual(len(result.candidates), 2)
-        self.assertGreaterEqual(len(result.clinical_drafts), 2)
+        self.assertEqual(len(result.evidence), 3)
+        self.assertEqual([candidate.name for candidate in result.candidates], ["Candesartan"])
+        self.assertEqual(len(result.clinical_drafts), 1)
         self.assertTrue(all(candidate.candidate_type == "literature-derived repurposing hypothesis" for candidate in result.candidates))
+        self.assertTrue(all(candidate.approval_status == "kept_repurposing_candidate" for candidate in result.candidates))
+        excluded = [review.candidate_name for review in result.approval_reviews if review.status == "excluded_approved_or_standard"]
+        self.assertIn("Zolmitriptan", excluded)
+        self.assertIn("Erenumab", excluded)
         self.assertEqual(result.citation_warnings, [])
 
     def test_no_default_demo_cache_is_seeded(self) -> None:

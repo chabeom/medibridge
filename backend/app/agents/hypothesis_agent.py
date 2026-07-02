@@ -25,6 +25,7 @@ class RepurposingHypothesisAgent:
         "adolescent",
         "adult",
         "aged",
+        "analgesics",
         "animals",
         "biomarkers",
         "case reports",
@@ -39,19 +40,28 @@ class RepurposingHypothesisAgent:
         "migraine",
         "patients",
         "placebo",
+        "placebos",
         "review",
+        "tablets",
         "treatment",
         "young adult",
     }
     broad_class_terms = (
         "agents",
         "agonists",
+        "analgesics",
         "antagonists",
         "antibodies",
+        "anti-inflammatory agents",
+        "benzenesulfonamides",
         "enzymes",
         "inhibitors",
+        "non-steroidal anti-inflammatory agents",
         "peptides",
+        "piperidines",
+        "pyridines",
         "receptors",
+        "tablets",
         "tryptamines",
         "oxazolidinones",
     )
@@ -217,11 +227,22 @@ class RepurposingHypothesisAgent:
         disease_terms = {profile.disease.canonical_name.lower(), *(item.lower() for item in profile.disease.synonyms)}
         if lowered in self.blocked_terms or lowered in disease_terms:
             return False
+        normalized_label = re.sub(r"[^a-z0-9]+", " ", lowered).strip()
+        if any(self._broad_term_matches(normalized_label, term) for term in self.broad_class_terms):
+            return False
         if any(blocked in lowered for blocked in ("study", "trial", "patient", "disease", "therapy", "review")):
             return False
         if lowered.startswith(("anti-", "non-", "pre-")) and len(name.split()) > 3:
             return False
         return any(char.isalpha() for char in name)
+
+    def _broad_term_matches(self, normalized_label: str, broad_term: str) -> bool:
+        normalized_term = re.sub(r"[^a-z0-9]+", " ", broad_term.lower()).strip()
+        return (
+            normalized_label == normalized_term
+            or normalized_label.endswith(f" {normalized_term}")
+            or normalized_term in normalized_label
+        )
 
     def _specificity_score(self, name: str) -> int:
         lowered = name.lower()
