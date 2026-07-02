@@ -148,7 +148,8 @@ const candidateTypeLabels: Record<string, string> = {
   "approved comparator or reference candidate": "승인약 기준 후보",
   "symptom-control reference candidate": "증상 조절 기준 후보",
   "broad antiviral repurposing hypothesis": "광범위 항바이러스 재창출 가설",
-  "supportive-care comparator or hypothesis": "보조요법 비교/가설 후보"
+  "supportive-care comparator or hypothesis": "보조요법 비교/가설 후보",
+  "literature-derived repurposing hypothesis": "문헌 기반 재창출 가설"
 };
 
 const severityLabels: Record<string, string> = {

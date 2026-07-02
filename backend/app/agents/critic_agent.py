@@ -43,6 +43,18 @@ class CriticAgent:
                         evidence_ids=candidate.evidence_ids,
                     )
                 )
+            if "literature-derived" in candidate.candidate_type:
+                findings.append(
+                    CriticFinding(
+                        severity="medium",
+                        category="candidate_confidence",
+                        message=(
+                            f"{candidate.name}은(는) PubMed 문헌에서 자동 추출된 후보입니다. "
+                            "약물명/약물군 혼동, 기존 표준치료와 재창출 가설의 구분, 적응증 외삽 가능성을 추가 검증해야 합니다."
+                        ),
+                        evidence_ids=candidate.evidence_ids,
+                    )
+                )
 
         for warning in citation_warnings:
             findings.append(
