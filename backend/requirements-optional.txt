@@ -1,0 +1,2 @@
+# Optional chemistry support. Install only if the target environment supports it.
+rdkit
