@@ -102,6 +102,7 @@ class PubMedClient:
             keywords = [item for item in keywords if item]
             chemicals = [self._text(item) for item in article.findall(".//Chemical/NameOfSubstance")]
             chemicals = [item for item in chemicals if item]
+            doi = self._article_id(article, "doi")
 
             records.append(
                 {
@@ -114,6 +115,7 @@ class PubMedClient:
                     "mesh_terms": mesh_terms,
                     "keywords": keywords,
                     "drugs": chemicals,
+                    "doi": doi,
                     "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/",
                     "evidence_type": self._evidence_type(pub_types),
                     "confidence": self._confidence(pub_types, abstract),
@@ -140,6 +142,12 @@ class PubMedClient:
         medline_date = self._text(article.find(".//JournalIssue/PubDate/MedlineDate"))
         match = re.search(r"\d{4}", medline_date)
         return match.group(0) if match else ""
+
+    def _article_id(self, article: ElementTree.Element, id_type: str) -> str:
+        for item in article.findall(".//ArticleIdList/ArticleId"):
+            if item.attrib.get("IdType", "").lower() == id_type.lower():
+                return self._text(item)
+        return ""
 
     def _evidence_type(self, publication_types: list[str]) -> str:
         lowered = " ".join(publication_types).lower()

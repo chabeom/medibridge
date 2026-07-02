@@ -148,6 +148,10 @@ function summarizeTrace(summary: string) {
 
   const exact: Record<string, string> = {
     "Loaded cached evidence from the evidence store.": "캐시된 근거 저장소에서 자료를 불러왔습니다.",
+    "Retrieved evidence from PubMed and domestic paper providers, then merged duplicates.":
+      "PubMed와 국내 논문 API에서 근거를 병렬 수집하고 중복을 병합했습니다.",
+    "No disease-specific evidence passed provider relevance filters.":
+      "질환 관련성 필터를 통과한 국내외 근거를 찾지 못했습니다.",
     "Generated mechanism-backed repurposing hypotheses from cached evidence.": "근거 기반 약물 재창출 후보를 생성했습니다.",
     "Filtered candidates that are already approved or standard therapies for the requested disease.":
       "이미 승인되었거나 표준치료로 쓰이는 약물은 재창출 후보에서 제외했습니다.",

@@ -56,11 +56,20 @@ class FakePubMedClient:
         ]
 
 
+class DisabledScienceOnClient:
+    def is_configured(self) -> bool:
+        return False
+
+    async def search(self, query: str, limit: int = 10) -> list[dict]:
+        return []
+
+
 class PipelineTest(unittest.TestCase):
     def test_live_pipeline_returns_literature_candidates(self) -> None:
         async def run_case():
             orchestrator = MediBridgeOrchestrator()
             orchestrator.evidence_agent._pubmed_client = FakePubMedClient()
+            orchestrator.evidence_agent._scienceon_client = DisabledScienceOnClient()
             return await orchestrator.run(AnalysisRequest(input_text="migraine", mode="live", top_k=3))
 
         result = asyncio.run(run_case())

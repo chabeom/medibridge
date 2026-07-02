@@ -9,6 +9,7 @@ from app.models.schemas import DiseaseProfile, EvidenceItem, NormalizedDisease
 from app.services.cache import EvidenceStore
 from app.services.normalizer import DiseaseNormalizer
 from app.tools.pubmed import PubMedClient
+from app.tools.scienceon import ScienceOnClient
 
 
 SAMPLE_PUBMED_XML = """
@@ -49,6 +50,12 @@ SAMPLE_PUBMED_XML = """
         <Keyword>repurposing</Keyword>
       </KeywordList>
     </MedlineCitation>
+    <PubmedData>
+      <ArticleIdList>
+        <ArticleId IdType="pubmed">123456</ArticleId>
+        <ArticleId IdType="doi">10.123/example-disease</ArticleId>
+      </ArticleIdList>
+    </PubmedData>
   </PubmedArticle>
 </PubmedArticleSet>
 """
@@ -89,6 +96,7 @@ class PubMedIntegrationTest(unittest.TestCase):
         self.assertEqual(records[0]["publication_year"], "2024")
         self.assertEqual(records[0]["evidence_type"], "clinical_trial")
         self.assertEqual(records[0]["drugs"], ["Erenumab"])
+        self.assertEqual(records[0]["doi"], "10.123/example-disease")
         self.assertIn("BACKGROUND", records[0]["abstract"])
         self.assertGreater(records[0]["confidence"], 0.6)
 
@@ -189,6 +197,77 @@ class PubMedIntegrationTest(unittest.TestCase):
         self.assertEqual(trace.metadata["records_kept"], 1)
         self.assertEqual([item.source_id for item in evidence], ["111"])
 
+    def test_evidence_agent_merges_pubmed_and_scienceon_duplicates(self) -> None:
+        class PubMedWithDoiClient:
+            async def search(self, query: str, limit: int = 20) -> list[dict]:
+                return [
+                    {
+                        "pmid": "333",
+                        "title": "Drug repurposing for example disease",
+                        "abstract": "Example disease has limited treatment options.",
+                        "journal": "Example Journal",
+                        "publication_year": "2024",
+                        "publication_types": ["Clinical Trial"],
+                        "mesh_terms": ["Example Disease"],
+                        "keywords": ["repurposing"],
+                        "drugs": ["Candesartan"],
+                        "doi": "10.123/example-disease",
+                        "url": "https://pubmed.ncbi.nlm.nih.gov/333/",
+                        "evidence_type": "clinical_trial",
+                        "confidence": 0.78,
+                    }
+                ]
+
+        class FakeScienceOnClient:
+            def is_configured(self) -> bool:
+                return True
+
+            async def search(self, query: str, limit: int = 10) -> list[dict]:
+                return [
+                    {
+                        "source_id": "SCI-1",
+                        "title": "Drug repurposing for example disease",
+                        "abstract": "A domestic article also discusses example disease repurposing.",
+                        "journal": "Domestic Medical Journal",
+                        "publication_year": "2024",
+                        "doi": "10.123/example-disease",
+                        "keywords": ["example disease", "repurposing"],
+                        "url": "https://scienceon.example/articles/SCI-1",
+                    }
+                ]
+
+        async def run_case():
+            store = EvidenceStore()
+            agent = EvidenceRetrievalAgent(
+                store,
+                pubmed_client=PubMedWithDoiClient(),
+                scienceon_client=FakeScienceOnClient(),
+            )
+            profile = DiseaseProfile(
+                disease=NormalizedDisease(
+                    input_text="example disease",
+                    canonical_name="Example Disease",
+                    synonyms=[],
+                    confidence=0.45,
+                    needs_external_lookup=True,
+                ),
+                unmet_need="External disease profile lookup is required.",
+                mechanisms=[],
+                targets=[],
+                biomarkers=[],
+                patient_subgroups=[],
+            )
+            return await agent.run(profile, mode="live")
+
+        evidence, trace = asyncio.run(run_case())
+
+        self.assertEqual(len(evidence), 1)
+        self.assertEqual(evidence[0].source, "PubMed + ScienceON")
+        self.assertTrue(evidence[0].metadata["cross_validated"])
+        self.assertGreater(evidence[0].confidence, 0.78)
+        self.assertEqual(trace.metadata["domestic_records_kept"], 1)
+        self.assertEqual(trace.metadata["cross_validated_count"], 1)
+
     def test_korean_disease_name_is_normalized_for_pubmed(self) -> None:
         normalizer = DiseaseNormalizer()
 
@@ -197,6 +276,33 @@ class PubMedIntegrationTest(unittest.TestCase):
         self.assertEqual(disease.canonical_name, "Diabetes Mellitus")
         self.assertIn("Diabetes Mellitus", disease.synonyms)
         self.assertGreater(disease.confidence, 0.8)
+
+    def test_scienceon_client_normalizes_json_records(self) -> None:
+        client = ScienceOnClient(api_key="test-key", base_url="https://example.test")
+        payload = """
+        {
+          "result": {
+            "items": [
+              {
+                "title": "국내 의학 논문 예시",
+                "abstract": "질환과 약물 재창출을 다룬 초록입니다.",
+                "journal": "국내의학학술지",
+                "pubYear": "2025",
+                "doi": "10.555/domestic",
+                "keyword": "질환;약물 재창출"
+              }
+            ]
+          }
+        }
+        """
+
+        records = client._parse_response(payload, "application/json")
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["title"], "국내 의학 논문 예시")
+        self.assertEqual(records[0]["publication_year"], "2025")
+        self.assertEqual(records[0]["doi"], "10.555/domestic")
+        self.assertEqual(records[0]["keywords"], ["질환", "약물 재창출"])
 
     def test_hypothesis_agent_builds_candidates_from_pubmed_drugs(self) -> None:
         async def run_case():

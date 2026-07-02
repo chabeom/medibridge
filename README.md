@@ -20,12 +20,16 @@ Next.js Frontend
     -> Orchestrator Agent
       -> Disease Analyst Agent
       -> Evidence Retrieval Agent
+        -> PubMed Provider
+        -> ScienceON Korean Paper Provider
+        -> Evidence Merger
       -> Repurposing Hypothesis Agent
+      -> Approval Status Agent
       -> Safety and Feasibility Agent
       -> Clinical Design Agent
       -> Critic Agent
     -> PostgreSQL + pgvector
-    -> Public APIs: PubMed, ClinicalTrials.gov, PubChem, ChEMBL, openFDA
+    -> Public APIs: PubMed/NCBI, ScienceON, ClinicalTrials.gov, PubChem, ChEMBL, openFDA
 ```
 
 ## Current Development State
@@ -33,11 +37,24 @@ Next.js Frontend
 This first scaffold includes:
 
 - A pure-Python agent pipeline that can run without external API keys.
-- Demo evidence for a representative disease flow.
+- PubMed evidence retrieval with optional ScienceON domestic paper retrieval.
+- Evidence provider merging with duplicate detection and cross-source confidence adjustment.
 - Cache-first service interfaces for future PostgreSQL integration.
 - Candidate scoring, citation validation, and critic review.
 - A Next.js dashboard shell wired for `POST /analysis`.
 - Database schema draft for PostgreSQL + pgvector.
+
+## API Keys
+
+Create `.env` from `.env.example`. ScienceON is optional; when the key is missing, the backend skips the domestic provider and continues with PubMed.
+
+```powershell
+NCBI_API_KEY=...
+NCBI_EMAIL=...
+SCIENCEON_API_KEY=...
+SCIENCEON_API_URL=https://openapi.ndsl.kr/itemsearch.do
+SCIENCEON_TICKET=ARTI
+```
 
 ## Local Backend Smoke Test
 
