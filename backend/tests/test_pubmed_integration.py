@@ -7,6 +7,7 @@ from app.agents.evidence_agent import EvidenceRetrievalAgent
 from app.agents.hypothesis_agent import RepurposingHypothesisAgent
 from app.models.schemas import DiseaseProfile, EvidenceItem, NormalizedDisease
 from app.services.cache import EvidenceStore
+from app.services.normalizer import DiseaseNormalizer
 from app.tools.pubmed import PubMedClient
 
 
@@ -125,6 +126,77 @@ class PubMedIntegrationTest(unittest.TestCase):
         self.assertEqual(len(cached), 1)
         self.assertEqual(len(queries), 1)
         self.assertIn('"Example Disease"', queries[0])
+        self.assertIn("[Title/Abstract]", queries[0])
+        self.assertIn("[MeSH Terms]", queries[0])
+
+    def test_evidence_agent_filters_irrelevant_pubmed_records(self) -> None:
+        class MixedPubMedClient:
+            async def search(self, query: str, limit: int = 20) -> list[dict]:
+                return [
+                    {
+                        "pmid": "111",
+                        "title": "Zolmitriptan treatment for migraine",
+                        "abstract": "A clinical trial evaluated zolmitriptan for acute migraine treatment.",
+                        "journal": "Example Journal",
+                        "publication_year": "2025",
+                        "publication_types": ["Clinical Trial"],
+                        "mesh_terms": ["Migraine Disorders"],
+                        "keywords": ["migraine"],
+                        "drugs": ["Zolmitriptan"],
+                        "url": "https://pubmed.ncbi.nlm.nih.gov/111/",
+                        "evidence_type": "clinical_trial",
+                        "confidence": 0.78,
+                    },
+                    {
+                        "pmid": "222",
+                        "title": "A general review of drug therapy",
+                        "abstract": "This record is not about the requested condition.",
+                        "journal": "Example Journal",
+                        "publication_year": "2025",
+                        "publication_types": ["Review"],
+                        "mesh_terms": ["Drug Therapy"],
+                        "keywords": ["treatment"],
+                        "drugs": ["ExampleDrug"],
+                        "url": "https://pubmed.ncbi.nlm.nih.gov/222/",
+                        "evidence_type": "review",
+                        "confidence": 0.7,
+                    },
+                ]
+
+        async def run_case():
+            store = EvidenceStore()
+            agent = EvidenceRetrievalAgent(store, pubmed_client=MixedPubMedClient())
+            profile = DiseaseProfile(
+                disease=NormalizedDisease(
+                    input_text="migraine",
+                    canonical_name="Migraine Disorders",
+                    synonyms=["migraine"],
+                    confidence=0.86,
+                    needs_external_lookup=True,
+                ),
+                unmet_need="External disease profile lookup is required.",
+                mechanisms=[],
+                targets=[],
+                biomarkers=[],
+                patient_subgroups=[],
+            )
+            return await agent.run(profile, mode="live")
+
+        evidence, trace = asyncio.run(run_case())
+
+        self.assertEqual(trace.status, "complete")
+        self.assertEqual(trace.metadata["records_returned"], 2)
+        self.assertEqual(trace.metadata["records_kept"], 1)
+        self.assertEqual([item.source_id for item in evidence], ["111"])
+
+    def test_korean_disease_name_is_normalized_for_pubmed(self) -> None:
+        normalizer = DiseaseNormalizer()
+
+        disease = normalizer.normalize("당뇨병")
+
+        self.assertEqual(disease.canonical_name, "Diabetes Mellitus")
+        self.assertIn("Diabetes Mellitus", disease.synonyms)
+        self.assertGreater(disease.confidence, 0.8)
 
     def test_hypothesis_agent_builds_candidates_from_pubmed_drugs(self) -> None:
         async def run_case():

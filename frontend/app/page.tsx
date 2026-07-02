@@ -45,69 +45,6 @@ type AnalysisResult = {
   disclaimer: string;
 };
 
-const fallbackResult: AnalysisResult = {
-  normalized_disease: { canonical_name: "Common Cold", confidence: 0.94 },
-  disease_profile: {
-    unmet_need:
-      "감기는 대개 자연 회복되지만 환자 수가 매우 많고 병원체별 특이 치료 옵션이 제한적입니다. 안전한 증상 완화와 숙주 반응 조절 전략을 근거 기반으로 검토할 필요가 있습니다.",
-    mechanisms: ["리노바이러스 감염", "비강 상피 염증", "숙주 인터페론 반응"],
-    targets: ["콧물 경로", "숙주 항바이러스 반응", "바이러스 복제"],
-    biomarkers: ["증상 중증도 점수", "증상 해소까지의 시간", "바이러스량"]
-  },
-  candidates: [
-    {
-      name: "Nitazoxanide",
-      rationale:
-        "초기 바이러스성 상기도 감염이 확인된 환자군에서는 광범위 항바이러스 재창출 가설로 검토할 수 있습니다. 다만 감기의 원인 바이러스가 다양하므로 근거 강도 평가는 신중해야 합니다.",
-      mechanism: "숙주 지향 및 광범위 항바이러스 경로 조절",
-      candidate_type: "broad antiviral repurposing hypothesis",
-      overall_score: 73.2,
-      safety_summary: "임상 설계 전 위장관 내약성, 약물 상호작용, 기존 사용 이력을 검토해야 합니다.",
-      score_breakdown: {
-        biological_plausibility: 21.5,
-        evidence_strength: 16.8,
-        clinical_feasibility: 11.0,
-        safety_feasibility: 11.5,
-        novelty: 6.4,
-        citation_confidence: 6.0
-      },
-      warnings: []
-    }
-  ],
-  evidence: [
-    {
-      id: "demo-cold-001",
-      source: "demo",
-      title: "감기 질환 생물학 데모 근거",
-      summary:
-        "감기는 리노바이러스 감염, 상피 염증, 점액 분비, 숙주 인터페론 반응을 중심으로 가설을 세울 수 있는 바이러스성 상기도 증후군입니다.",
-      confidence: 0.7
-    }
-  ],
-  clinical_drafts: [
-    {
-      candidate_name: "Nitazoxanide",
-      phase: "1b/2a상 가설 검증 연구",
-      population: "표준치료 검토 후 초기 단순 바이러스성 상기도 감염 성인에 해당하는 환자",
-      primary_endpoint: "기저치 대비 증상 중증도 점수 변화",
-      secondary_endpoints: ["증상 해소까지의 시간", "바이러스량"]
-    }
-  ],
-  critic_findings: [
-    {
-      severity: "low",
-      category: "scope",
-      message: "본 결과는 전문가 검토와 외부 검증이 필요한 연구 가설로 해석해야 합니다."
-    }
-  ],
-  agent_trace: [
-    { agent: "Disease Normalizer", status: "complete", summary: "Canonical disease name: Common Cold." },
-    { agent: "Evidence Retrieval Agent", status: "complete", summary: "Loaded cached evidence from the evidence store." },
-    { agent: "Critic Agent", status: "complete", summary: "Reviewed evidence gaps and clinical design readiness." }
-  ],
-  disclaimer: "연구지원용 결과입니다. 의료 조언, 진단, 처방 지침, 임상 효능 입증으로 해석하면 안 됩니다."
-};
-
 const tabs = ["overview", "candidates", "evidence", "clinical", "critic"] as const;
 type Tab = (typeof tabs)[number];
 
@@ -120,8 +57,29 @@ const tabLabels: Record<Tab, string> = {
 };
 
 const diseaseLabels: Record<string, string> = {
-  "Amyotrophic Lateral Sclerosis": "근위축성 측삭경화증(ALS)",
-  "Common Cold": "감기"
+  "Common Cold": "감기",
+  Influenza: "독감",
+  "COVID-19": "코로나19",
+  "Diabetes Mellitus": "당뇨병",
+  "Diabetes Mellitus, Type 2": "제2형 당뇨병",
+  Hypertension: "고혈압",
+  "Migraine Disorders": "편두통",
+  Dementia: "치매",
+  "Alzheimer Disease": "알츠하이머병",
+  "Parkinson Disease": "파킨슨병",
+  Asthma: "천식",
+  "Pulmonary Disease, Chronic Obstructive": "만성폐쇄성폐질환",
+  "Lung Neoplasms": "폐암",
+  "Breast Neoplasms": "유방암",
+  "Colorectal Neoplasms": "대장암",
+  "Stomach Neoplasms": "위암",
+  "Liver Neoplasms": "간암",
+  "Pancreatic Neoplasms": "췌장암",
+  Stroke: "뇌졸중",
+  "Arthritis, Rheumatoid": "류마티스 관절염",
+  Depression: "우울증",
+  Schizophrenia: "조현병",
+  "Amyotrophic Lateral Sclerosis": "루게릭병"
 };
 
 const agentLabels: Record<string, string> = {
@@ -197,17 +155,23 @@ function summarizeTrace(summary: string) {
 }
 
 export default function Home() {
-  const [query, setQuery] = useState("감기");
+  const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("overview");
-  const [result, setResult] = useState<AnalysisResult>(fallbackResult);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState("데모 캐시 모드");
+  const [notice, setNotice] = useState("질환명을 입력해 분석을 시작하세요");
 
-  const topCandidate = result.candidates[0];
+  const topCandidate = result?.candidates[0];
   const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000", []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const inputText = query.trim();
+    if (!inputText) {
+      setNotice("분석할 질환명을 입력하세요");
+      return;
+    }
+
     setLoading(true);
     setNotice("분석 중");
 
@@ -215,7 +179,7 @@ export default function Home() {
       const response = await fetch(`${apiUrl}/analysis`, {
         method: "POST",
         headers: { "Content-Type": "application/json; charset=utf-8" },
-        body: JSON.stringify({ input_text: query, mode: "demo", top_k: 5 })
+        body: JSON.stringify({ input_text: inputText, mode: "live", top_k: 5 })
       });
 
       if (!response.ok) {
@@ -224,10 +188,11 @@ export default function Home() {
 
       const payload = await response.json();
       setResult(payload.result);
+      setActiveTab("overview");
       setNotice("백엔드 분석 결과");
     } catch {
-      setResult(fallbackResult);
-      setNotice("로컬 예시 결과");
+      setResult(null);
+      setNotice("분석에 실패했습니다. 백엔드 서버와 API 키 상태를 확인하세요");
     } finally {
       setLoading(false);
     }
@@ -262,41 +227,53 @@ export default function Home() {
           </div>
 
           <div className="agentList">
-            {result.agent_trace.map((step) => (
-              <div className="agentStep" key={`${step.agent}-${step.summary}`}>
-                <span data-status={step.status} />
+            {result ? (
+              result.agent_trace.map((step) => (
+                <div className="agentStep" key={`${step.agent}-${step.summary}`}>
+                  <span data-status={step.status} />
+                  <div>
+                    <strong>{agentLabels[step.agent] ?? step.agent}</strong>
+                    <p>
+                      {statusLabels[step.status] ?? step.status} / {summarizeTrace(step.summary)}
+                    </p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="agentStep">
+                <span data-status="needs_data" />
                 <div>
-                  <strong>{agentLabels[step.agent] ?? step.agent}</strong>
-                  <p>
-                    {statusLabels[step.status] ?? step.status} / {summarizeTrace(step.summary)}
-                  </p>
+                  <strong>분석 대기</strong>
+                  <p>질환명을 입력하면 에이전트 실행 로그가 표시됩니다.</p>
                 </div>
               </div>
-            ))}
+            )}
           </div>
         </aside>
 
         <section className="resultPanel">
-          <header className="resultHeader">
-            <div>
-              <p className="eyebrow">표준 질환명</p>
-              <h2>{displayDiseaseName(result.normalized_disease.canonical_name)}</h2>
-            </div>
-            <div className="confidence">
-              <span>{Math.round(result.normalized_disease.confidence * 100)}%</span>
-              <small>정규화 신뢰도</small>
-            </div>
-          </header>
+          {result ? (
+            <>
+              <header className="resultHeader">
+                <div>
+                  <p className="eyebrow">표준 질환명</p>
+                  <h2>{displayDiseaseName(result.normalized_disease.canonical_name)}</h2>
+                </div>
+                <div className="confidence">
+                  <span>{Math.round(result.normalized_disease.confidence * 100)}%</span>
+                  <small>정규화 신뢰도</small>
+                </div>
+              </header>
 
-          <nav className="tabs" aria-label="분석 결과 탭">
-            {tabs.map((tab) => (
-              <button key={tab} className={activeTab === tab ? "active" : ""} onClick={() => setActiveTab(tab)}>
-                {tabLabels[tab]}
-              </button>
-            ))}
-          </nav>
+              <nav className="tabs" aria-label="분석 결과 탭">
+                {tabs.map((tab) => (
+                  <button key={tab} className={activeTab === tab ? "active" : ""} onClick={() => setActiveTab(tab)}>
+                    {tabLabels[tab]}
+                  </button>
+                ))}
+              </nav>
 
-          {activeTab === "overview" && (
+              {activeTab === "overview" && (
             <section className="tabBody overviewGrid">
               <article className="panelBlock wide">
                 <div className="blockTitle">
@@ -333,9 +310,9 @@ export default function Home() {
                 <p>{topCandidate?.rationale ?? "분석을 실행하면 후보 약물이 생성됩니다."}</p>
               </article>
             </section>
-          )}
+              )}
 
-          {activeTab === "candidates" && (
+              {activeTab === "candidates" && (
             <section className="tabBody">
               <div className="candidateTable">
                 {result.candidates.length > 0 ? (
@@ -354,14 +331,14 @@ export default function Home() {
                 ) : (
                   <article className="panelBlock">
                     <strong>후보 약물이 아직 없습니다</strong>
-                    <p>현재 데모 캐시에 없는 질환입니다. 실제 외부 API 연동 후 근거 수집과 후보 생성이 진행됩니다.</p>
+                    <p>PubMed 근거에서 후보 약물명이 충분히 확인되지 않았습니다. 검색어를 더 구체화하거나 추가 DB 연동 후 다시 검토할 수 있습니다.</p>
                   </article>
                 )}
               </div>
             </section>
-          )}
+              )}
 
-          {activeTab === "evidence" && (
+              {activeTab === "evidence" && (
             <section className="tabBody evidenceList">
               {result.evidence.length > 0 ? (
                 result.evidence.map((item) => (
@@ -380,9 +357,9 @@ export default function Home() {
                 </article>
               )}
             </section>
-          )}
+              )}
 
-          {activeTab === "clinical" && (
+              {activeTab === "clinical" && (
             <section className="tabBody evidenceList">
               {result.clinical_drafts.length > 0 ? (
                 result.clinical_drafts.map((draft) => (
@@ -408,9 +385,9 @@ export default function Home() {
                 </article>
               )}
             </section>
-          )}
+              )}
 
-          {activeTab === "critic" && (
+              {activeTab === "critic" && (
             <section className="tabBody evidenceList">
               {result.critic_findings.length > 0 ? (
                 result.critic_findings.map((finding) => (
@@ -429,6 +406,14 @@ export default function Home() {
                 </article>
               )}
               <p className="disclaimer">{result.disclaimer}</p>
+            </section>
+              )}
+            </>
+          ) : (
+            <section className="emptyState">
+              <FileSearch size={34} />
+              <h2>분석할 질환을 입력하세요</h2>
+              <p>초기 데모 결과를 표시하지 않습니다. 질환명을 입력하면 PubMed 기반 근거 검색부터 후보 생성, 임상 설계, 비판 검토까지 실행됩니다.</p>
             </section>
           )}
         </section>

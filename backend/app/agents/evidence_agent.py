@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from app.models.schemas import AgentTrace, DiseaseProfile, EvidenceItem
 from app.services.cache import EvidenceStore
 from app.tools.pubmed import PubMedClient
@@ -23,6 +25,20 @@ class EvidenceRetrievalAgent:
                 metadata={"evidence_count": len(cached), "mode": mode, "cache_hit": True},
             )
 
+        search_terms = self._pubmed_search_terms(profile)
+        if not search_terms:
+            return [], AgentTrace(
+                agent=self.name,
+                status="needs_data",
+                summary="No PubMed-compatible disease term is available for this request.",
+                metadata={
+                    "evidence_count": 0,
+                    "mode": mode,
+                    "cache_hit": False,
+                    "canonical_name": profile.disease.canonical_name,
+                },
+            )
+
         query = self._build_pubmed_query(profile)
         try:
             records = await self._pubmed_client.search(query, limit=8)
@@ -40,6 +56,8 @@ class EvidenceRetrievalAgent:
                 },
             )
 
+        returned_count = len(records)
+        records = self._filter_relevant_records(records, search_terms)
         evidence = [self._to_evidence_item(profile, record) for record in records]
         if evidence:
             self._evidence_store.save_many(profile.disease.canonical_name, evidence)
@@ -52,6 +70,9 @@ class EvidenceRetrievalAgent:
                     "mode": mode,
                     "cache_hit": False,
                     "query": query,
+                    "search_terms": search_terms,
+                    "records_returned": returned_count,
+                    "records_kept": len(records),
                     "sources": ["PubMed"],
                 },
             )
@@ -59,25 +80,89 @@ class EvidenceRetrievalAgent:
         return [], AgentTrace(
             agent=self.name,
             status="needs_data",
-            summary="No cached evidence or PubMed records found for this disease.",
-            metadata={"evidence_count": 0, "mode": mode, "cache_hit": False, "query": query},
+            summary="No disease-specific PubMed records passed the relevance filter.",
+            metadata={
+                "evidence_count": 0,
+                "mode": mode,
+                "cache_hit": False,
+                "query": query,
+                "search_terms": search_terms,
+                "records_returned": returned_count,
+                "records_kept": 0,
+            },
         )
 
     def _build_pubmed_query(self, profile: DiseaseProfile) -> str:
+        search_terms = self._pubmed_search_terms(profile)
+        disease_clauses: list[str] = []
+        for term in search_terms:
+            quoted = self._quote_term(term)
+            disease_clauses.append(f"{quoted}[Title/Abstract]")
+            disease_clauses.append(f"{quoted}[MeSH Terms]")
+
+        disease_query = " OR ".join(disease_clauses)
+        therapy_query = " OR ".join(
+            [
+                '"drug therapy"[Title/Abstract]',
+                '"drug repositioning"[Title/Abstract]',
+                'repurposing[Title/Abstract]',
+                'treatment[Title/Abstract]',
+                'therapeutics[MeSH Terms]',
+                '"clinical trial"[Publication Type]',
+                '"randomized controlled trial"[Publication Type]',
+            ]
+        )
+        return f"({disease_query}) AND ({therapy_query})"
+
+    def _pubmed_search_terms(self, profile: DiseaseProfile) -> list[str]:
         names = [profile.disease.canonical_name, *profile.disease.synonyms]
         unique_names = []
         for name in names:
             cleaned = " ".join(name.strip().split())
-            if cleaned and cleaned.lower() not in {item.lower() for item in unique_names}:
+            if not cleaned or self._contains_hangul(cleaned) or not re.search(r"[A-Za-z0-9]", cleaned):
+                continue
+            if cleaned.lower() not in {item.lower() for item in unique_names}:
                 unique_names.append(cleaned)
 
-        disease_terms = " OR ".join(self._quote_term(name) for name in unique_names[:4])
-        return f"({disease_terms}) AND (drug therapy OR treatment OR clinical trial OR repurposing OR review)"
+        return unique_names[:6]
 
     def _quote_term(self, value: str) -> str:
+        value = value.replace('"', '\\"')
         if " " in value:
             return f'"{value}"'
         return value
+
+    def _contains_hangul(self, value: str) -> bool:
+        return bool(re.search(r"[가-힣]", value))
+
+    def _filter_relevant_records(self, records: list[dict], search_terms: list[str]) -> list[dict]:
+        relevant: list[dict] = []
+        for record in records:
+            text = self._record_search_text(record)
+            if any(self._term_matches_record(term, text) for term in search_terms):
+                relevant.append(record)
+        return relevant
+
+    def _record_search_text(self, record: dict) -> str:
+        parts = [
+            str(record.get("title", "")),
+            str(record.get("abstract", "")),
+            " ".join(str(item) for item in record.get("mesh_terms", [])),
+            " ".join(str(item) for item in record.get("keywords", [])),
+        ]
+        return " ".join(parts).lower()
+
+    def _term_matches_record(self, term: str, record_text: str) -> bool:
+        normalized = " ".join(term.lower().split())
+        if not normalized:
+            return False
+        if normalized in record_text:
+            return True
+
+        tokens = [item for item in re.split(r"[^a-z0-9]+", normalized) if len(item) >= 4]
+        if not tokens:
+            return False
+        return all(token in record_text for token in tokens)
 
     def _to_evidence_item(self, profile: DiseaseProfile, record: dict) -> EvidenceItem:
         pmid = str(record.get("pmid", ""))

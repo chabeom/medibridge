@@ -3,10 +3,7 @@ from __future__ import annotations
 from app.models.schemas import AgentTrace, ClinicalProtocolDraft, DiseaseProfile, DrugCandidate
 
 
-DISEASE_DISPLAY_NAMES = {
-    "Amyotrophic Lateral Sclerosis": "근위축성 측삭경화증(ALS)",
-    "Common Cold": "감기",
-}
+DISEASE_DISPLAY_NAMES: dict[str, str] = {}
 
 
 class ClinicalDesignAgent:
