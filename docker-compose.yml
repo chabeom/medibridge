@@ -4,10 +4,10 @@ services:
     container_name: medibridge-postgres
     environment:
       POSTGRES_USER: medibridge
-      POSTGRES_PASSWORD: medibridge
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before starting PostgreSQL}"
       POSTGRES_DB: medibridge
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - medibridge-postgres:/var/lib/postgresql/data
       - ./backend/app/db/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro

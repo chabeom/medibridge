@@ -88,7 +88,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 PowerShell에서 프로젝트 루트로 이동합니다.
 
 ```powershell
-cd C:\Users\bumji\source\repos\바이오공모
+cd <저장소 경로>
 ```
 
 Python 가상환경을 새로 만드는 경우:
@@ -108,24 +108,21 @@ python -m venv .venv
 프론트엔드 의존성 설치:
 
 ```powershell
-cd C:\Users\bumji\source\repos\바이오공모\frontend
+cd .\frontend
 pnpm install
 ```
 
-`pnpm` 명령어가 인식되지 않으면 Codex 번들 pnpm을 사용할 수 있습니다.
-
-```powershell
-C:\Users\bumji\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin\pnpm.cmd install
-```
 
 ## 백엔드 실행
 
 터미널 1개를 열고 아래 명령어를 실행합니다.
 
 ```powershell
-cd C:\Users\bumji\source\repos\바이오공모\backend
+cd .\backend
 ..\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
+
+분석 API는 로컬 클라이언트와 로컬 대시보드 전용입니다. 백엔드는 위 명령처럼 루프백에 바인딩합니다.
 
 정상 실행 확인:
 
@@ -148,16 +145,10 @@ Invoke-RestMethod `
 터미널을 하나 더 열고 아래 명령어를 실행합니다.
 
 ```powershell
-cd C:\Users\bumji\source\repos\바이오공모\frontend
+cd .\frontend
 pnpm dev
 ```
 
-`pnpm`이 인식되지 않는 경우:
-
-```powershell
-cd C:\Users\bumji\source\repos\바이오공모\frontend
-C:\Users\bumji\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin\pnpm.cmd dev
-```
 
 브라우저에서 아래 주소로 접속합니다.
 
@@ -170,30 +161,26 @@ http://127.0.0.1:3000
 백엔드 테스트:
 
 ```powershell
-cd C:\Users\bumji\source\repos\바이오공모\backend
+cd .\backend
 ..\.venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
 프론트엔드 빌드:
 
 ```powershell
-cd C:\Users\bumji\source\repos\바이오공모\frontend
+cd .\frontend
 pnpm build
 ```
 
-`pnpm`이 인식되지 않는 경우:
-
-```powershell
-cd C:\Users\bumji\source\repos\바이오공모\frontend
-C:\Users\bumji\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin\pnpm.cmd build
-```
 
 ## Docker로 PostgreSQL 실행
 
-향후 캐시와 벡터 검색 저장소를 PostgreSQL/pgvector로 연결할 때 사용합니다.
+향후 캐시와 벡터 검색 저장소를 PostgreSQL/pgvector로 연결할 때 사용합니다. 시작 전에 루트의 `.env`에 새 `POSTGRES_PASSWORD`를 입력합니다. 호스트에서 접근할 수 있는 DB 주소는 `127.0.0.1:5432`입니다.
+
+기존 Docker 볼륨이 있다면 `.env`를 바꿔도 기존 DB 계정의 비밀번호는 그대로입니다. PostgreSQL에서 해당 계정 비밀번호를 교체하고 로컬 `.env`와 접속 설정을 맞춥니다.
 
 ```powershell
-cd C:\Users\bumji\source\repos\바이오공모
+cd <저장소 경로>
 docker compose up -d postgres
 ```
 
